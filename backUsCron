@@ -1,0 +1,4 @@
+# File /etc/cron.d/backUsCron
+# MINUTE HOUR DAY MONTH day USER COMMAND
+# MINUTO HORA DIA MES dia USUARIO COMANDO
+  00     21   *   *   1-6 root    /etc/backUs/.sh 
