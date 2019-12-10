@@ -26,8 +26,8 @@ function cambia_permisos {
     #Cambiar el propietario y grupo de los archivos
     #echo  "chown respaldo.respaldo -R $DIRECTORIOBASE"  
     #chown respaldo.respaldo -R $DIRECTORIOBASE 
-    echo  "chown respaldo.respaldo -R $BASE"  
-    chown respaldo.respaldo -R $BASE
+    echo  "chown $BKUSER.$BKUSER -R $BASE"  
+    chown $BKUSER.$BKUSER -R $BASE
 
     #Cambia permisos de lectura/escritura al directorio
     echo "chmod 770 $DIRECTORIO"  
@@ -53,7 +53,7 @@ function crear_directorio {
 
 }
 
-function bzr_respalda {
+function bzr_git_respalda {
    #+-------------------------------------------------+#
    #| Accede al codigo fuente para ponerlo en bazaar  |#
    #| crea un compreso del sistema y lo guarda        |#
@@ -137,6 +137,10 @@ function bzr_respalda {
 
 }
 
+
+
+
+
 function respalda_aplic {
     #+------------------------------------------------+#
     #| Lee las variables de aplicacion a respaldar    |#
@@ -168,13 +172,14 @@ function respalda_aplic {
 
      #Usuario aplicacion APLICCVS{numero}
      VARIABLE=`echo APLICCVS$CUENTAAPLIC`
-     echo "** VARIABLE $VARIABLE"
      eval APLICCVSVAR=\$$VARIABLE
-     echo "** $APLICCVSVAR"
+
+     echo "**APLICVAR - APLICNAMEVAR - APLICUSERVAR - APLICCVSVAR :  VARIABLES"
+     echo "** $APLICVAR - $APLICNAMEVAR - $APLICUSERVAR - $APLICCVSVAR : $APLICCVSVAR"
 
      #Verifica que el nombre y ruta de aplicacion esten definidas
      if [ -n "$APLICVAR" ] && [ -n "$APLICNAMEVAR" ];then
-     	 bzr_respalda $APLICVAR $APLICNAMEVAR  $APLICCVSVAR $APLICUSERVAR
+  	bzr_git_respalda $APLICVAR $APLICNAMEVAR  $APLICCVSVAR $APLICUSERVAR
      fi
      
      let CUENTAAPLIC+=1
@@ -211,19 +216,24 @@ function respaldar {
 
    ## Inicia el respaldo de bases de datos de POSTGRESQL
     if [ "$TYPODB" = "postgres" ];then
-	#Ingresa como usuario postgres
-	
-	# Limpieza y optimización de la base de datos
-	echo "su postgres --command=\"/usr/bin/vacuumdb -d $BASELOCAL -z\" "  
-	su postgres -c "/usr/bin/vacuumdb -d $BASELOCAL -z" 
-	
 
 	#Respalda todas las bases de postgres 	
 	if [ "$BASELOCAL" = "todopostgres" ];then
+           # Cleaning and optimization for all DB except templates and postgres
+           for DBN in $(su postgres -c "psql  -t -A  -c 'SELECT datname FROM pg_database' | egrep -v  '(template|postgres)' ") ; do
+             echo "su postgres --command=\"/usr/bin/vacuumdb -d $DBN -z\" "  
+             su postgres -c "/usr/bin/vacuumdb -d $DBN -z"
+           done
+	
 	   # Respalda todas las bases de datos de postgres
 	   echo "su postgres -c \"pg_dumpall \" | bzip2 -c > $FECHA.$BASELOCAL-$UNIDAD.$ACCION.bz2"  
            su postgres -c "pg_dumpall " | bzip2 -c > $FECHA.$BASELOCAL-$UNIDAD.$ACCION.bz2
         else 
+
+
+	  # Limpieza y optimización de la base de datos
+	  echo "su postgres --command=\"/usr/bin/vacuumdb -d $BASELOCAL -z\" "  
+	  su postgres -c "/usr/bin/vacuumdb -d $BASELOCAL -z" 
 	  # dumpeado y compresion directa de la base de datos
           if [ -n "$USUARIODB" ] && [ -n "$CLAVEDB" ]; then # Si usuario y clave estan establecidos, los usa, sino el usuario postgres
    	    echo "export PGPASSWORD=$CLAVEDB" 
@@ -330,6 +340,8 @@ date
  prueba_aplicacion /usr/bin/rdiff
 # Test de bzr
  prueba_aplicacion /usr/bin/bzr
+# Test de git
+ prueba_aplicacion /usr/bin/git
 # Test de bzip2
  prueba_aplicacion /bin/bzip2
 # Test de email
@@ -388,8 +400,7 @@ crear_directorio
         echo "NO Existe $DIRECTORIO/$ENLACEFIRMA" 
         ACCION="completo"
      fi
-     #respaldamos las aplicaciones
-     respalda_aplic
+
 
      #Verifica que la variable exista
      if [ -n "$DBVAR" ]; then
@@ -419,6 +430,8 @@ crear_directorio
      let CUENTA+=1
   done
 
+#respaldamos las aplicaciones
+respalda_aplic
 # Regresa los permisos de las carpetas
 cambia_permisos
 
